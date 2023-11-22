@@ -45,11 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -60,10 +57,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.scale
 import androidx.lifecycle.LifecycleOwner
 import com.example.tflite_nare.ui.theme.TFlite_NareTheme
+import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
 import org.tensorflow.lite.task.vision.segmenter.Segmentation
+import java.lang.Math.abs
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.math.max
@@ -89,13 +87,15 @@ private val permissionList = listOf(
     android.Manifest.permission.BLUETOOTH_SCAN,
     android.Manifest.permission.ACCESS_COARSE_LOCATION,
 )
-class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListener {
+class MainActivity : ComponentActivity(), ModelHelper.Luna {
     companion object {
         private const val ALPHA_COLOR = 128
     }
 
-    lateinit var seg:SegmentationPipeline
-    val SegmentationResult:MutableState<List<Segmentation>> = mutableStateOf(listOf())
+    lateinit var seg:ModelHelper
+
+    val SegmentationResult = mutableStateOf(byteArrayOf(0))
+
     fun checkPermission() {
         permissionList.forEach {
             val cameraPermission = ContextCompat.checkSelfPermission(
@@ -111,13 +111,7 @@ class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListe
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         checkPermission()
-        seg = SegmentationPipeline(
-        context = this,
-        imageSegmentationListener = this,
-            numThreads = 3,
-            currentDelegate = SegmentationPipeline.DELEGATE_CPU
-        )
-
+        seg = ModelHelper(this, this.assets)
         setContent {
             TFlite_NareTheme {
                 // A surface container using the 'background' color from the theme
@@ -169,47 +163,33 @@ class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListe
     fun landmarker(modifier: Modifier) {
         Canvas(modifier = modifier, onDraw =
         {
-            if (SegmentationResult.value.isNotEmpty()) {
-                val colorLabels =
-                    SegmentationResult.value[0].coloredLabels.mapIndexed { index, coloredLabel ->
-                        ColorLabel(
-                            index,
-                            coloredLabel.getlabel(),
-                            coloredLabel.argb
-                        )
-                    }
-                val maskTensor = SegmentationResult.value[0].masks[0]
-                val maskArray = maskTensor.buffer.array()
+            if (SegmentationResult.value.isNotEmpty() && SegmentationResult.value.size > 224) {
+                val maskArray = SegmentationResult.value
                 val pixels = IntArray(maskArray.size)
 
                 for (i in maskArray.indices) {
-
-                    val colorLabel = colorLabels[maskArray[i].toInt()].apply {
-                        isExist = true
-                    }
-                    val color = colorLabel.getColor()
-                    pixels[i] = color
-//                    if(color.red > 0f) {
-//                    }
-//                    Log.d("Colors", "->| ${0xFF6650a4.toInt()} || ${color}")
-
-
+                    val r = if(maskArray[i].toFloat() >= 255f) {1f} else kotlin.math.abs(maskArray[i].toFloat() / 255f)
+                    val color = Color(r, 0f, 1 - r, 0.9f)
+                    pixels[i] = color.hashCode()
                 }
 //                Log.d("Colors", "->| ${0xFF6650a4.toInt()} || ${Color.Yellow.hashCode()}")
+
                 val matrix: Matrix = Matrix()
+
                 matrix.setScale(-1f, 1f)
+
                 val source = Bitmap.createBitmap(
                     pixels,
-                    maskTensor.width,
-                    maskTensor.height,
+                    224,
+                    224,
                     Bitmap.Config.ARGB_8888
                 )
                 val image = Bitmap.createBitmap(
                     source,
                     0,
                     0,
-                    maskTensor.width,
-                    maskTensor.height,
+                    224,
+                    224,
                     matrix,
                     true
                 )
@@ -223,8 +203,7 @@ class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListe
                 val scaleWidth = (480f * scaleFactor).toInt()
                 val scaleHeight = (640f * scaleFactor).toInt()
 
-                val scaleBitmap = Bitmap.createScaledBitmap(image, scaleWidth, scaleHeight, false)
-                image.recycle()
+                val scaleBitmap = Bitmap.createScaledBitmap(image, scaleWidth, scaleHeight, true)
 
 //                Log.d("Colors", "${image.getColor(100,100)} | ${scaleWidth}, ${scaleHeight}")
 
@@ -283,7 +262,7 @@ class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListe
                             )
 
                             image.use { bitmapBuffer.copyPixelsFromBuffer(image.planes[0].buffer) }
-                            seg.segment(bitmapBuffer, image.imageInfo.rotationDegrees)
+                            seg.Result(bitmapBuffer)
 
                         }
                     }
@@ -335,21 +314,14 @@ class MainActivity : ComponentActivity(), SegmentationPipeline.SegmentationListe
         }, ContextCompat.getMainExecutor(context))
     }
 
-    override fun onError(error: String) {
-        TODO("Not yet implemented")
-    }
 
-    override fun onResults(
-        results: List<Segmentation>?,
-        inferenceTime: Long,
-        imageHeight: Int,
-        imageWidth: Int
+    override fun onResult(
+        results: TensorBuffer,
+        inferenceTime: Long
     ) {
-        if (results != null) {
-            SegmentationResult.value = results
-            Log.e("Camera", results[0].masks.size.toString())
 
-        }
+        val res = IntArray(244*244*1)
+        SegmentationResult.value = results.buffer.array()
     }
 
     data class ColorLabel(

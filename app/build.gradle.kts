@@ -78,6 +78,7 @@ dependencies {
 
     implementation ("org.tensorflow:tensorflow-lite-task-vision:0.4.0")
     // Import the GPU delegate plugin Library for GPU inference
+    implementation("org.tensorflow:tensorflow-lite:+")
     implementation ("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.0")
     implementation ("org.tensorflow:tensorflow-lite-gpu:2.9.0")
 }
