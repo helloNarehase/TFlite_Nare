@@ -4,12 +4,21 @@ import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.os.SystemClock
 import android.util.Log
-import org.tensorflow.lite.*
+import org.tensorflow.lite.DataType
+import org.tensorflow.lite.Delegate
+import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.InterpreterApi
 import org.tensorflow.lite.InterpreterApi.create
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
+import org.tensorflow.lite.nnapi.NnApiDelegate
+import org.tensorflow.lite.support.image.ImageProcessor
+import org.tensorflow.lite.support.image.TensorImage
+import org.tensorflow.lite.support.image.ops.ResizeOp
 import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
+import org.tensorflow.lite.support.tensorbuffer.TensorBufferFloat
 import java.io.FileInputStream
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.nio.channels.FileChannel
 
 
@@ -18,68 +27,98 @@ class ModelHelper(
     val assetManager: AssetManager,
 ) {
     lateinit var inter:InterpreterApi
-
+    private lateinit var inputImage : TensorImage
+    private var modelInputWidths:Int = 0
+    private var modelInputHeights:Int = 0
+    private lateinit var result:TensorBuffer
+    private lateinit var outputBuffer: TensorBuffer
     init {
         setModel()
     }
     fun setModel() {
-        val options = InterpreterApi.Options()
-        options.numThreads = 3
 
-        options.setNumThreads(3)
-//        options.useNNAPI = true
-
-        val input = Array(224) {Array(224) {FloatArray(3){0f}}}
+//        val compatList = CompatibilityList()
+//        val delegate = GpuDelegate(
+//            GpuDelegate.Options()
+//        )
 
 
+        val nnApiDelegate: Delegate = NnApiDelegate()
+//        val isNnApiDelegateAvailable: Boolean = nnApiDelegate.nativeHandle
+        val options = InterpreterApi.Options().apply{
+//            this.addDelegate(delegate)
+            this.setNumThreads(5)
+
+//            Log.d("Deli", delegates.toList().toString())
+
+//            val delegateOptions = compatList.bestOptionsForThisDevice
+
+//            this.addDelegate(GpuDelegate())
+//            if(compatList.isDelegateSupportedOnThisDevice){
+//                // if the device has a supported GPU, add the GPU delegate
+//
+//                val delegateOptions = compatList.bestOptionsForThisDevice
+//                this.addDelegate(GpuDelegate(delegateOptions))
+//                Log.e("TFTFTFTF", "GPU_On")
+//            } else {
+//                // if the GPU is not supported, run on 4 threads
+//                Log.e("TFTFTFTF", "un_GPU")
+//                this.setNumThreads(4)
+//            }
+
+        }
         inter = create(loadModelFile(), options)
+
+//        var nnApiDelegate: NnApiDelegate? = null
+//        var GpuDelegate: GpuDelegate? = null
+//        nnApiDelegate = NnApiDelegate()
+//        GpuDelegate = GpuDelegate()
+//        options.addDelegate(GpuDelegate)
+//        options.numThreads = 5
+//        options.addDelegate {
+//            DELEGATE_NNAPI.toLong()
+//        }
+//        options.useNNAPI = true
 
         val inputTensor = inter.getInputTensor(0)
         val inputShape = inputTensor.shape()
+        inputImage = TensorImage(inputTensor.dataType())
         val modelInputChannel = inputShape[0]
         val modelInputWidth = inputShape[1]
+        val modelInputHeight = inputShape[2]
+
+        modelInputHeights = modelInputWidth
+        modelInputWidths = modelInputHeight
 
         val outputTensor = inter.getOutputTensor(0)
         val outputShape = outputTensor.shape()
-        val modelOutputClasses = outputShape[1]
+        outputBuffer = TensorBuffer.createFixedSize(outputTensor.shape(), outputTensor.dataType())
+
         Log.d("Model Info", "| InPut | ${inputTensor.shape().toList()}, ${inputTensor.dataType()} |  | OutPut | ${outputShape.toList()}, ${outputTensor.dataType()} | <--|")
     }
 
+    private fun loadImage(bitmap: Bitmap) : TensorImage {
+        inputImage.load(bitmap)
+        val imageProcessor = ImageProcessor.Builder()
+            .add(ResizeOp(modelInputHeights, modelInputWidths, ResizeOp.ResizeMethod.NEAREST_NEIGHBOR))
+//            .add(NormalizeOp(0.0f, 255.0f))
+            .build()
+        return imageProcessor.process(inputImage)
+    }
+
     fun Result(img:Bitmap) {
-        val inputSize = 224
-        val inputChannels = 3
-
-        // 이미지를 224x224 크기로 변경
-        val resizedBitmap = Bitmap.createScaledBitmap(img, inputSize, inputSize, true)
-        Log.e("img", resizedBitmap.width.toString() + "||" + resizedBitmap.height.toString())
-
-        val byteBuffer = ByteBuffer.allocateDirect(inputSize * inputSize * inputChannels * 4)
-        byteBuffer.order(ByteOrder.nativeOrder())
-        resizedBitmap.copyPixelsToBuffer(byteBuffer)
-        byteBuffer.rewind()
-
-        // ByteBuffer를 TensorBuffer로 변환하여 TFLite 모델에 전달할 텐서 생성
-        val inputDataType = DataType.FLOAT32 // 입력 데이터 타입
-        val shape = intArrayOf(1, 224, 224, 3)
-        val tensorBuffer = TensorBuffer.createFixedSize(shape, inputDataType)
-        tensorBuffer.loadBuffer(byteBuffer)
-
-//        val result = Array(224) {Array(224) {FloatArray(3){0f}}}
-
-
-        val DataType = DataType.FLOAT32 // 입력 데이터 타입
-        val shapes = intArrayOf(1, 224, 224, 1)
-        val result = TensorBuffer.createFixedSize(shapes, DataType)
-        Log.e("Oresult", result.buffer.array().size.toString())
-
+        inputImage = loadImage(img)
         var inferenceTime = SystemClock.uptimeMillis()
 
-        inter.run(tensorBuffer.buffer, result.buffer)
+        inter.run(inputImage.buffer, outputBuffer.buffer)
 
+        val DataType = DataType.FLOAT32 // 입력 데이터 타입
+        val gahi = TensorBufferFloat.createFrom(outputBuffer, DataType)
+
+        Log.e("result", gahi.floatArray.max().toString())
+        Log.e("result", img.getPixel(50,50).toString())
         inferenceTime = SystemClock.uptimeMillis() - inferenceTime
-        Log.e("result", result.floatArray.size.toString())
-
-        luna.onResult(result, inferenceTime)
+        luna.onResult(gahi.floatArray, inferenceTime)
     }
 
 
@@ -95,7 +134,7 @@ class ModelHelper(
 
     interface Luna{
         fun onResult(
-            results: TensorBuffer,
+            results: FloatArray,
             inferenceTime: Long
         )
     }
@@ -103,8 +142,11 @@ class ModelHelper(
         const val DELEGATE_CPU = 0
         const val DELEGATE_GPU = 1
         const val DELEGATE_NNAPI = 2
-        const val modelPath = "model.tflite"
+//        const val modelPath = "deeplabv3.tflite"
+//        const val modelPath = "model.tflite"
+        const val modelPath = "depth.tflite"
 
         private const val TAG = "LUNA"
     }
 }
+

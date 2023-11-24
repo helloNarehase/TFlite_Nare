@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,11 +58,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.example.tflite_nare.ui.theme.TFlite_NareTheme
-import org.tensorflow.lite.support.tensorbuffer.TensorBuffer
-import org.tensorflow.lite.task.vision.segmenter.Segmentation
-import java.lang.Math.abs
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.max
 
 const val TAG = "Nomal"
@@ -94,7 +91,7 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
 
     lateinit var seg:ModelHelper
 
-    val SegmentationResult = mutableStateOf(byteArrayOf(0))
+    val SegmentationResult = mutableStateOf(floatArrayOf(0f))
 
     fun checkPermission() {
         permissionList.forEach {
@@ -163,36 +160,41 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
     fun landmarker(modifier: Modifier) {
         Canvas(modifier = modifier, onDraw =
         {
-            if (SegmentationResult.value.isNotEmpty() && SegmentationResult.value.size > 224) {
+            if (SegmentationResult.value.size > 1) {
                 val maskArray = SegmentationResult.value
                 val pixels = IntArray(maskArray.size)
-
+                val maximum = maskArray.max()
+                val minimum = maskArray.min()
                 for (i in maskArray.indices) {
-                    val r = if(maskArray[i].toFloat() >= 255f) {1f} else kotlin.math.abs(maskArray[i].toFloat() / 255f)
-                    val color = Color(r, 0f, 1 - r, 0.9f)
+
+                    val r = (maskArray[i]-minimum)/(maximum-minimum)
+//                    Log.d("Color", r.toString())
+                    val color = Color(1f - r, 1f - r, 1f - r, 1f)
                     pixels[i] = color.hashCode()
                 }
-//                Log.d("Colors", "->| ${0xFF6650a4.toInt()} || ${Color.Yellow.hashCode()}")
+//                Log.d("Colors", "->| ${0xFF6650a4.toInt ()} || ${Color.Yellow.hashCode()}")
 
                 val matrix: Matrix = Matrix()
 
-                matrix.setScale(-1f, 1f)
-
+//                matrix.setScale(-1f, 1f)
+//                Log.e("matrix", "${minimum} ${maximum}")
                 val source = Bitmap.createBitmap(
                     pixels,
                     224,
                     224,
                     Bitmap.Config.ARGB_8888
                 )
-                val image = Bitmap.createBitmap(
-                    source,
-                    0,
-                    0,
-                    224,
-                    224,
-                    matrix,
-                    true
-                )
+                val rotateMatrix = Matrix(); rotateMatrix.postRotate(90f); //-360~360
+                val image = Bitmap.createBitmap(source, 0, 0, source.getWidth(), source.getHeight(), rotateMatrix, false);
+//                val image = Bitmap.createBitmap(
+//                    source,
+//                    0,
+//                    0,
+//                    224,
+//                    224,
+//                    matrix,
+//                    true
+//                )
 
 //                Log.d("Colors", "->| ${image.height} ${pixels.size}")
 
@@ -282,7 +284,7 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
                                 it.filter { camInfo ->
                                     // cam2Infos[0] is either EXTERNAL or best built-in camera
                                     val thisCamId = Camera2CameraInfo.from(camInfo).cameraId
-                                    thisCamId == cam2Infos[1].cameraId
+                                    thisCamId == cam2Infos[0].cameraId
 //                                    thisCamId == cam2Infos[3].cameraId
                                 }
                             }.build()
@@ -316,12 +318,12 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
 
 
     override fun onResult(
-        results: TensorBuffer,
+        results: FloatArray,
         inferenceTime: Long
     ) {
 
         val res = IntArray(244*244*1)
-        SegmentationResult.value = results.buffer.array()
+        SegmentationResult.value = results
     }
 
     data class ColorLabel(
