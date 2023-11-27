@@ -12,6 +12,7 @@ import org.tensorflow.lite.InterpreterApi.create
 import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import org.tensorflow.lite.nnapi.NnApiDelegate
+import org.tensorflow.lite.DelegateFactory
 import org.tensorflow.lite.support.image.ImageProcessor
 import org.tensorflow.lite.support.image.TensorImage
 import org.tensorflow.lite.support.image.ops.ResizeOp
@@ -36,37 +37,17 @@ class ModelHelper(
         setModel()
     }
     fun setModel() {
-
-//        val compatList = CompatibilityList()
-//        val delegate = GpuDelegate(
-//            GpuDelegate.Options()
-//        )
-
-
-        val nnApiDelegate: Delegate = NnApiDelegate()
-//        val isNnApiDelegateAvailable: Boolean = nnApiDelegate.nativeHandle
-        val options = InterpreterApi.Options().apply{
-//            this.addDelegate(delegate)
-            this.setNumThreads(5)
-
-//            Log.d("Deli", delegates.toList().toString())
-
-//            val delegateOptions = compatList.bestOptionsForThisDevice
-
-//            this.addDelegate(GpuDelegate())
-//            if(compatList.isDelegateSupportedOnThisDevice){
-//                // if the device has a supported GPU, add the GPU delegate
-//
-//                val delegateOptions = compatList.bestOptionsForThisDevice
-//                this.addDelegate(GpuDelegate(delegateOptions))
-//                Log.e("TFTFTFTF", "GPU_On")
-//            } else {
-//                // if the GPU is not supported, run on 4 threads
-//                Log.e("TFTFTFTF", "un_GPU")
-//                this.setNumThreads(4)
-//            }
+        val compatList = CompatibilityList()
+        val options = Interpreter.Options().apply {
+            Log.e("tftf", compatList.isDelegateSupportedOnThisDevice.toString())
+            if (compatList.isDelegateSupportedOnThisDevice) {
+                addDelegate(GpuDelegate(compatList.bestOptionsForThisDevice))
+//                val nnApiDelegate = NnApiDelegate()
+//                this.addDelegate(nnApiDelegate)
+            }
 
         }
+
         inter = create(loadModelFile(), options)
 
 //        var nnApiDelegate: NnApiDelegate? = null
@@ -115,8 +96,8 @@ class ModelHelper(
         val DataType = DataType.FLOAT32 // 입력 데이터 타입
         val gahi = TensorBufferFloat.createFrom(outputBuffer, DataType)
 
-        Log.e("result", gahi.floatArray.max().toString())
-        Log.e("result", img.getPixel(50,50).toString())
+//        Log.e("result", gahi.floatArray.max().toString())
+//        Log.e("result", img.getPixel(50,50).toString())
         inferenceTime = SystemClock.uptimeMillis() - inferenceTime
         luna.onResult(gahi.floatArray, inferenceTime)
     }
@@ -128,6 +109,7 @@ class ModelHelper(
         val fileChannel = fileInputStream.channel
         val startOffset = assetFileDescriptor.startOffset
         val declaredLength = assetFileDescriptor.declaredLength
+        Log.e("tftf", "tftf")
         return fileChannel.map(FileChannel.MapMode.READ_ONLY, startOffset, declaredLength)
     }
 
@@ -144,7 +126,7 @@ class ModelHelper(
         const val DELEGATE_NNAPI = 2
 //        const val modelPath = "deeplabv3.tflite"
 //        const val modelPath = "model.tflite"
-        const val modelPath = "depth.tflite"
+        const val modelPath = "Depther.tflite"
 
         private const val TAG = "LUNA"
     }

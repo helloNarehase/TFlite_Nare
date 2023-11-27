@@ -6,7 +6,6 @@ plugins {
 android {
     namespace = "com.example.tflite_nare"
     compileSdk = 33
-
     defaultConfig {
         applicationId = "com.example.tflite_nare"
         minSdk = 33
@@ -77,9 +76,10 @@ dependencies {
 
 
     implementation ("org.tensorflow:tensorflow-lite-task-vision:0.4.0")
-    implementation ("org.tensorflow:tensorflow-lite:2.10.0")
+    implementation ("org.tensorflow:tensorflow-lite-api:2.14.0")
+    implementation ("org.tensorflow:tensorflow-lite:2.14.0")
     // Import the GPU delegate plugin Library for GPU inference
 //    implementation("org.tensorflow:tensorflow-lite:+")
-    implementation ("org.tensorflow:tensorflow-lite-gpu-delegate-plugin:0.4.0")
-    implementation ("org.tensorflow:tensorflow-lite-gpu:2.9.0")
+    implementation ("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+    implementation ("org.tensorflow:tensorflow-lite-gpu-api:2.14.0")
 }

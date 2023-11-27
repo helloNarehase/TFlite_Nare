@@ -30,6 +30,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -122,12 +123,16 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
                             .padding(top = 50.dp)
 
                     ) {
-                        CameraView(
-                            Modifier
-                                .size(300.dp, 400.dp)
+                        Column {
+                            CameraView(
+                                Modifier
+                                    .size(300.dp, 400.dp)
 //                                    .fillMaxWidth()
 //                                    .height(300.dp)
-                                .border(3.dp, Color.Cyan))
+                                    .border(3.dp, Color.Cyan))
+                            DimsScatter(modifier = Modifier
+                                .size(300.dp, 400.dp))
+                        }
                     }
                 }
             }
@@ -154,6 +159,44 @@ class MainActivity : ComponentActivity(), ModelHelper.Luna {
             )
             landmarker(modifier = Modifier.fillMaxSize())
 
+        }
+    }
+
+    @Composable
+    fun DimsScatter(modifier: Modifier) {
+        Canvas(modifier = modifier) {
+            if (SegmentationResult.value.isNotEmpty() && SegmentationResult.value.size > 224) {
+                val maskArray = SegmentationResult.value
+                val pixels = IntArray(maskArray.size)
+
+                for (i in maskArray.indices) {
+//                    Log.e("Res", "${maskArray[i]}")
+                    val r = if(maskArray[i].toFloat() >= 255f) {1f} else kotlin.math.abs(maskArray[i].toFloat() / 255f)
+                    val color = Color(r, 0f, 1 - r, 0.9f)
+                    pixels[i] = color.hashCode()
+                }
+//                Log.d("Colors", "->| ${0xFF6650a4.toInt()} || ${Color.Yellow.hashCode()}")
+
+                val matrix: Matrix = Matrix()
+
+                matrix.setScale(-1f, 1f)
+
+                val source = Bitmap.createBitmap(
+                    pixels,
+                    224,
+                    224,
+                    Bitmap.Config.ARGB_8888
+                )
+                val image = Bitmap.createBitmap(
+                    source,
+                    0,
+                    0,
+                    224,
+                    224,
+                    matrix,
+                    true
+                )
+            }
         }
     }
     @Composable
